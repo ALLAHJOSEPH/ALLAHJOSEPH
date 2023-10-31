@@ -1,4 +1,4 @@
-- 👋 Hi, I’m @ALLAHJOSEPH
+- 👋 Hi, I’m Augustinus Joseph
 - 👀 I’m interested in life's ineffable wonder.
 - 🌱 I’m currently learning how to be Otacon and Solid Snake at the same time.
 - 💞️ I’m looking to collaborate on things that will enhance our lives.
