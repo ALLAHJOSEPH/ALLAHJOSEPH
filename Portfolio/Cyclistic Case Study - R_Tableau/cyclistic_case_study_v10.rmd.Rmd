@@ -1,0 +1,798 @@
+---
+title: "Cyclistic Case Study"
+author: "Augustinus Joseph"
+date: "2023-08-26"
+output: html_document
+---
+
+# Cyclistic User Marketing Analysis: Identifying Differentiating Features
+
+This case study, as per Moreno's request representing Cyclistic via Google and Motivate International Inc, seeks to examine customer behavior and identify differentiating traits to figure out how to increase the number of annual memberships.
+
+## Setting up my environment 
+
+### Downloading the Data
+
+To perform the analysis, I had to access the data through this link
+provided by Google and Motivate International via Coursera. 
+
+find the dataset [here](https://divvy-tripdata.s3.amazonaws.com/index.html).
+
+### Addressing Accessibility, Licensing, Privacy, and Security 
+
+The data has been made available by Motivate International Inc. under this license. This is public data. Data-Privacy protocols restrict the use of riders’ personally identifiable information.
+This means that you won’t be able to connect pass purchases to credit card numbers to determine if casual riders live in the Cyclistic service area or if they have purchased multiple single passes.
+
+### Organizing and Preparing the Data
+
+After inspecting the spreadsheets (checking for primary and foreign keys), I noticed a large number of observations. Since there were thirteen datasets to combine, I created a directory called "Accumulative Trip Data"; it consists of data gathered between April 2022 and April 2023. When trying this on your computer, make sure to have your folder sub-directory path set up correctly for the code to process.
+
+If you follow along, your folder should look something like this:
+
+![DF Config Example Screenshot](\Users\allah\Documents\Data Analytics\Working Directory\Cyclistic\Cyclistic Case Study\Functioning Docs\Screenshot_2023_06_26_152709.png)
+
+### Load Packages
+
+```{r Load Packages, warning=FALSE}
+library(tidyverse)
+library(readxl)
+library(skimr)
+library(janitor)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(shiny)
+library(tinytex)
+library(vitae)
+library(stringr)
+library(purrr)
+```
+
+### Load the Data
+
+```{r Load Data, warning=FALSE}
+datapak_cyclistic_df <- 
+  dir("Accumulative Trip Data/", 
+      full.names = T) %>% 
+  map_df(read_csv)
+```
+
+### Inspect the data
+
+```{r Inspect Data, warning=FALSE}
+head(datapak_cyclistic_df)
+str(datapak_cyclistic_df)
+glimpse(datapak_cyclistic_df)
+colnames(datapak_cyclistic_df)
+skim_without_charts(datapak_cyclistic_df)
+summary(datapak_cyclistic_df)
+```
+
+## Data Integrity Acknowledgement
+### Missing values
+
+Analyzing the data, I have a few quick takeaways. Outside of the spreadsheet collectively consisting of more than 6 million unique observations composed of a combination of different data structure types, I also caught a bunch of missing values. These missing values differ between each row and further between the spreadsheets. I will only get rid of rows if it is necessary to perform calculations. Furthermore, this dataset is being used in a map chart; So, to keep everything consistent the dataset will primarily be maintained.
+
+In this dataset, missing values consist of:
+
++ missing numeric values for end lat and longitude. 
++ Missing end and start station names and IDs.
+
+###  Calculations
+
+#### Missing Lat/Lon
+
+```{r Missing Lat/Lon, warning=FALSE}
+paste(6290/6230310*100 ,'%',sep = '')
+```
+
+Missing end latitude and longitude percentage: .1009% of the data.
+
+#### Missing Station Designations
+
+##### Start Station Name
+
+```{r Start Station Names, warning=FALSE}
+print(sprintf("%.2f%%",902896/6230310*100))
+```
+
+Missing start station name percentage: 14.49% of the data.
+
+##### Start Station ID
+
+```{r Start Sation IDs, warning=FALSE}
+print(sprintf("%.2f%%",903028/6230310*100))
+```
+
+Missing start station ID percentage: 14.49% of the data.
+
+##### End Station Name
+
+```{r End Station Names, warning=FALSE}
+print(sprintf("%.2f%%",964949/6230310*100))
+```
+
+Missing end station names percentage: 15.49% of the data.
+
+##### End Station ID
+
+```{r End Station IDs, warning=FALSE}
+print(sprintf("%.2f%%",965090/6230310*100))
+```
+
+Missing end station ID percentage: 15.49% of the data.
+
+##### Total Missing Station Name and ID Percentages
+
+```{r Total Missing Station Names and IDs Percentage}
+print(sprintf("%.2f%%",(14.492 + 15.490 + 14.49411 + 15.48798)/4))
+```
+
+Missing end and start station designations account for 14.99% of the data.
+
+### Data Inconsistencies
+
+The various kinds of "station_id" are labeled inconsistently.
+
+Inconsistencies exist in these columns:
+
+- "start_station_id"
+- "end_station_id"
+
+Across both 'station_id' columns, there is a complete absence of proper labeling consistency. Before this data is worked with, it should be noted that if the missing values are omitted, it could be advised to gather more data *if* any stakeholders believe the 15% of missing designations are a significant portion to account for. While this highlights a point where more data needs to be gathered, the missing data is not relevant to my analysis. Additionally, the missing values fall under the standard threshold, so even if rows were removed, the dataset is still *technically* workable. Moreover, the lack of consistent labeling is also irrelevant to this analysis and has no bearing on the findings. Again, if any of the data is significant to stakeholders it would be advised to gather more because, in some cases, all rows are affected.
+
+## Transform And Organize The Data
+
+I need to truncate and remove irrelevant data.
+
+```{r Dataframe Truncate, warning=FALSE}
+trm_cyc_df <- datapak_cyclistic_df %>%
+  select(ride_id, rideable_type, started_at, ended_at, start_station_name, 
+         end_station_name, member_casual)
+
+head(trm_cyc_df)
+```
+
+Upon reviewing the data, I believe renaming certain columns and labels would be beneficial. For instance, the “annual member” is currently listed as “member”. To maintain clear and consistent findings, it is best to rename it and minimize the potential for confusion. Additionally, I believe calculating ride duration can provide extra context when working to differentiate the member types.
+
+```{r Dataframe Renaming, warning=FALSE}
+ctrm_cyc_df <- trm_cyc_df %>%
+  select(ride_id, rideable_type, started_at, ended_at, start_station_name,
+         end_station_name, member_casual) %>%
+  rename(start_time = started_at, end_time = ended_at,
+         member_type = member_casual) %>%
+  mutate(
+    member_type = ifelse(member_type == "member", "Annual", member_type),
+    member_type = ifelse(member_type == "casual", "Casual", member_type),
+    ride_duration = as.numeric(difftime(end_time, start_time, units = "secs"))
+  ) %>%
+  filter(ride_duration >= 0)
+
+head(ctrm_cyc_df)
+```
+
+Cleaning the data, I have exposed 103 observations that have ride times of less than zero seconds. This is impossible, let's see why!
+
+```{r Less Than Zero Calculations, warning=FALSE}
+lzctrm_cyc_df <- trm_cyc_df %>%
+  select(ride_id, rideable_type, started_at, ended_at, start_station_name,
+         end_station_name, member_casual) %>%
+  rename(start_time = started_at, end_time = ended_at,
+         member_type = member_casual) %>%
+  mutate(
+    member_type = ifelse(member_type == "member", "Annual", member_type),
+    member_type = ifelse(member_type == "casual", "Casual", member_type),
+    ride_duration = as.numeric(difftime(end_time, start_time, units = "secs"))
+  ) %>%
+  filter(ride_duration < 0)
+
+head(lzctrm_cyc_df)
+```
+
+It appears that the reason why there are a handful of rows with ride durations of less than zero is because those rows’ end times are marked to start before the start time. The time stamps suggest the dates were swapped or logged incorrectly. Now that we know what is causing the issue, we can go ahead and cut them out to start performing calculations and creating plots.
+
+Now, I arrange the data:
+
+```{r Arranged and Corrected Dataframe, warning=FALSE}
+actrm_cyc_df<- arrange(ctrm_cyc_df, -ride_duration)
+
+head(actrm_cyc_df)
+summary(actrm_cyc_df)
+```
+
+## Data Summary Calculations
+### Ride Duration Statistics
+
+Here, I gather basic essential statistics from the ride duration calculations.
+
+#### All Member Statistics
+
+
+```{r All Memeber Data Summary, warning=FALSE}
+cyc_summ_df <- actrm_cyc_df %>% 
+  summarize(
+    max_ride_duration = max(ride_duration, na.rm = TRUE), 
+    min_ride_duration = min(ride_duration, na.rm = TRUE),
+    average_ride_duration = mean(ride_duration, na.rm = TRUE),
+    mode_ride_duration = as.numeric(names(sort(table(ride_duration), decreasing = TRUE))[1]),
+        Q1 = quantile(ride_duration, 0.25, na.rm = TRUE),
+    Q3 = quantile(ride_duration, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    Std_Dev = sd(ride_duration, na.rm = TRUE),
+    Variance = var(ride_duration, na.rm = TRUE),
+    Range = max_ride_duration - min_ride_duration
+  )
+
+print(cyc_summ_df)
+```
+
+Since the goal is to understand the difference between the two member types, let's do a specialized summary for each group.
+
+#### Annual Member Statistics
+
+```{r Annual Member Stats, warning=FALSE}
+anu_cyc_df <- actrm_cyc_df %>%
+  select(ride_id, rideable_type, start_time, end_time, start_station_name,
+         end_station_name, member_type, ride_duration) %>%
+  filter(member_type == "Annual")
+
+head(anu_cyc_df)
+skim_without_charts(anu_cyc_df)
+
+
+anu_summ_df <- anu_cyc_df %>% 
+  summarize(
+    max_ride_duration = max(ride_duration, na.rm = TRUE), 
+    min_ride_duration = min(ride_duration, na.rm = TRUE),
+    average_ride_duration = mean(ride_duration, na.rm = TRUE),
+    mode_ride_duration = names(sort(table(ride_duration), decreasing = TRUE))[1],
+        Q1 = quantile(ride_duration, 0.25, na.rm = TRUE),
+    Q3 = quantile(ride_duration, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    Std_Dev = sd(ride_duration, na.rm = TRUE),
+    Variance = var(ride_duration, na.rm = TRUE),
+    Range = max_ride_duration - min_ride_duration
+  )
+
+print(anu_summ_df)
+```
+
+Okay, same process for the casual riders!
+
+#### Casual Rider Statistics
+
+```{r Casual Rider Stats, warning=FALSE}
+cas_cyc_df <- actrm_cyc_df %>%
+  select(ride_id, rideable_type, start_time, end_time, start_station_name,
+         end_station_name, member_type, ride_duration) %>%
+  filter(member_type == "Casual")
+
+head(cas_cyc_df)
+skim_without_charts(cas_cyc_df)
+
+
+cas_summ_df <- cas_cyc_df %>% 
+  summarize(
+    max_ride_duration = max(ride_duration, na.rm = TRUE), 
+    min_ride_duration = min(ride_duration, na.rm = TRUE),
+    average_ride_duration = mean(ride_duration, na.rm = TRUE),
+    mode_ride_duration = as.numeric(names(sort(table(ride_duration), decreasing = TRUE))[1]),
+      Q1 = quantile(ride_duration, 0.25, na.rm = TRUE),
+    Q3 = quantile(ride_duration, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    Std_Dev = sd(ride_duration, na.rm = TRUE),
+    Variance = var(ride_duration, na.rm = TRUE),
+    Range = max_ride_duration - min_ride_duration
+  )
+
+print(cas_summ_df)
+```
+
+These observations show us that casual riders have a longer average ride time and take longer rides than annual members.
+
+### Total Rider Count
+
+Now, do ride IDs symbolize total number of riders or simply total number of rides? Is there a way to find the total rider count? Upon observation, using functions like glimpse, it becomes apparent that there are 6,230,310 distinct ride IDs. Given that this count aligns with the total number of rows, it is advisable to inspect the ride IDs for any recurring elements.
+
+Noting that rides with negative ride duration do not affect the outcome of this observation, they will be included to have the most accurate count of total rides.
+
+```{r Total Ride Dataframe, warning=FALSE}
+ttrm_cyc_df <- trm_cyc_df %>% 
+   select(ride_id, rideable_type, started_at, ended_at, start_station_name,
+         end_station_name, member_casual) %>%
+  rename(start_time = started_at, end_time = ended_at,
+         member_type = member_casual) %>%
+  mutate(
+    member_type = ifelse(member_type == "member", "Annual", member_type),
+    member_type = ifelse(member_type == "casual", "Casual", member_type),
+    ride_duration = as.numeric(difftime(end_time, start_time, units = "secs"))
+  )
+
+View(ttrm_cyc_df)
+```
+
+
+#### All Ride IDs
+
+Here, I find out how many unique ride IDs there are.
+
+```{r Unique Ride IDs, warning=FALSE}
+ride_count <- ttrm_cyc_df %>% 
+  summarize(distinct_riders = n_distinct(ride_id))
+
+print(ride_count)
+```
+
+Here, I filter certain characters in a random ride ID to check for repeating elements.
+
+```{r Ride ID Inspection, warning=FALSE}
+View(datapak_cyclistic_df[grepl("^AA", datapak_cyclistic_df$ride_id), ])
+View(datapak_cyclistic_df[grepl("^AA98", datapak_cyclistic_df$ride_id), ])
+View(datapak_cyclistic_df[grepl("^AA98C", datapak_cyclistic_df$ride_id), ])
+
+print(datapak_cyclistic_df[grepl("^AA98C", datapak_cyclistic_df$ride_id), ])
+```
+
+After viewing this count, I conclude that the number of unique "ride_id"s is equal to the number of rows in the dataframe and there are no repeating IDs. Yet, upon scrutinizing the "ride_id"s, it becomes apparent that there are shared character sequences among the IDs, and it should be mentioned that some even share the same street names in their metadata. Due to the ambiguity in the "ride_id" sequencing method, these IDs do not provide an accurate representation of the overall count of subscribed members; they solely signify completed trips. 
+
+#### Annual Member Initiated Rides
+
+let's see how many rides were initiated by annual members.
+
+```{r Annual Member Initiated Rides, warning=FALSE}
+anu_count <- ttrm_cyc_df  %>% 
+   filter(member_type == "Annual") %>% 
+  summarize(distinct_rides = n_distinct(ride_id))
+
+print(anu_count)
+```
+
+#### Casual Rider Initiated Rides
+
+let's see how many rides were initiated by casual riders.
+
+```{r Casual Rider Initiated Rides, warning=FALSE}
+cas_count <- cas_cyc_df %>% 
+  filter(member_type == "Casual") %>% 
+  summarize(distinct_rides = n_distinct(ride_id))
+
+print(cas_count)
+```
+
+### Member-Type Ride Percentages
+
+Let's see what percentage of rides are of each member type.
+
+#### Annual Rides
+
+```{r Percentage of Annual Member Rides, warning=FALSE}
+anu_percentage <- (sprintf("%.2f%%", (anu_count / ride_count) * 100))
+print(anu_percentage)
+```
+
+#### Casual Rides
+
+```{r Percentage of Casual Rider Rides, warning=FALSE}
+cas_percentage <- (sprintf("%.2f%%", (cas_count / ride_count) * 100))
+print(cas_percentage)
+```
+
+Key takeaways: There are 6,230,310 unique rides. Annual members make up  60.12% of total rides, whereas casual riders fill the remaining 39.88%.
+
+### A Year In Reflection
+
+Last but not least, let's figure out how much ridership has increased for Cyclistic this season. To do that, we'll compare the data between rides from April 2022 and 2023.
+
+```{r April 2022 x April 2023 Comparison}
+april_2022 <- ctrm_cyc_df %>% 
+filter(format(start_time, "%Y-%m") == "2022-04")
+april_2023 <- ctrm_cyc_df %>% 
+filter(format(start_time, "%Y-%m") == "2023-04")
+
+head(april_2022)
+summary(april_2022)
+
+april_2022_summary <- april_2022 %>%
+  summarize(
+    max_ride_duration = max(ride_duration),
+    min_ride_duration = min(ride_duration),
+    avg_ride_duration = mean(ride_duration),
+    mode_ride_duration = as.numeric(names(sort(table(ride_duration), decreasing = TRUE))[1]),
+     Q1 = quantile(ride_duration, 0.25, na.rm = TRUE),
+    Q3 = quantile(ride_duration, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    Std_Dev = sd(ride_duration, na.rm = TRUE),
+    Variance = var(ride_duration, na.rm = TRUE),
+   Range = max_ride_duration - min_ride_duration,
+    ride_count = n()
+  )
+
+print(april_2022_summary)
+
+
+head(april_2023)
+summary(april_2023)
+
+april_2023_summary <- april_2023 %>%
+  summarize(
+    max_ride_duration = max(ride_duration),
+    min_ride_duration = min(ride_duration),
+    avg_ride_duration = mean(ride_duration),
+    mode_ride_duration = as.numeric(names(sort(table(ride_duration), decreasing = TRUE))[1]),
+     Q1 = quantile(ride_duration, 0.25, na.rm = TRUE),
+    Q3 = quantile(ride_duration, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    Std_Dev = sd(ride_duration, na.rm = TRUE),
+    Variance = var(ride_duration, na.rm = TRUE),
+    Range = max_ride_duration - min_ride_duration,
+    ride_count = n()
+  )
+print(april_2023_summary)
+```
+
+With these observations, we can see that the ride count increased by over 50,000 rides from April 2022 to April 2023. Additionally, with the summaries, we can see that the average ride duration was longer in 2022. In the same breath, 2022 had a longer max ride duration. Although the ride duration stats from 2022 outperform those of 2023, April 2023 was a more successful year as far as ride count goes. If ride costs are calculated by distance, maybe 2022 could have arguably been a better year. With all of this mentioned, if the goal is to figure out how to market to casual riders, there are more casual riders to work with this year. 
+
+## Data Visualizations
+
+Now that we have cleaned, transformed, and inspected the data, let's see what differences present themselves through visual inspection.
+
+### Ride Duration Chart 
+##### Which members take the longest trips?
+
+**Focus:** Examine ride duration and ride count to understand demographics and expose differentiating qualities between the member types.
+
+#### Chart I 
+
+```{r Chart I - Ride Duration, warning=FALSE, echo=FALSE}
+ggplot(data = ctrm_cyc_df) +
+  geom_bar(mapping = aes(x = ride_duration, fill = member_type), position = "dodge") +
+  scale_x_continuous(limits = c(0, 7000), breaks = seq(0, 7000, 1000)) +
+  xlab("Average Ride Duration (in seconds)") +
+  ylab("Rider Count") +
+  labs(title = "Cyclistic: Ride Duration vs. Ride Count", 
+       subtitle = "Breakdown of Ride Duration to Number of Rides", 
+       caption = "Data collected by Motivate International Inc.", 
+       fill = "Member Type")
+```
+
+###### Missing Values
+
+Due to the scale being used in the plot, most of the anomaly rides are not represented. 
+
+```{r CI - Missing Value Calculations, warning=FALSE}
+print(sprintf("%.2f%%", 49748/6230310*100 ))
+```
+
+In creating this plot, 49,747 rows were removed. However. this only accounts for 0.80% of the data so the plot is still 99.202% accurate. In this chart, annual members are represented in red and casual riders are in blue. Viewing this chart we can see that annual members outnumber casual riders for all trips between 0 and 1500 seconds. The data shows that annual members outnumber casual riders for all trips between 0 and 1500 seconds while casual riders generally outnumber annual members for all trips beyond that point. Additionally, the majority of annual member trips are around 270 seconds (roughly 4.5 minutes) and casual riders typically travel for around 430 seconds (roughly 7 minutes). It is important to note that, although casual riders tend to take drastically longer trips than annual members, the number of casual rides is not substantial enough to outweigh the annual member ride count. That being the case, it is equally as important to mention that there are a pretty consistent number of rides that support this trend of *long-distance casual rides*.
+
+###### Marketing Notes: 
+
+With this information, you can pinpoint which users participated in the longest rides and offer special annual member promotions. For example, How about 35% off annual membership for casual riders who participate in trips with the longest ride duration?
+
+###  Time of Day 
+##### When are the peak activity hours for cyclistic members?
+
+**Focus:** Analyze date and time of use patterns to further differentiate member types.
+
+**DF Mod**
+
+To perform my analysis, I have to extract chronologic metadata and make a few modifications to the original dataframe code.
+
+```{r CII - Time Dataframe Mods, warning=FALSE}
+time_cyc_df <- ctrm_cyc_df %>%
+  mutate(
+    year = year(start_time),
+    hour = hour(start_time),
+    wday = wday(start_time),
+    month = month(start_time)
+  ) %>%
+  group_by(year, month, hour, wday, member_type) %>%
+  summarize(
+    avg_ride_duration = mean(ride_duration),
+    count = n()
+  )
+
+head(time_cyc_df)
+```
+
+#### Chart II
+
+```{r Chart II - Time of Day, echo=FALSE, warning=FALSE}
+ggplot(data = time_cyc_df) +
+  geom_point(mapping = aes(x = avg_ride_duration, y = hour,
+                           color = member_type,
+                           size = count)) +
+  facet_wrap(~ factor(month(`month`), labels = month.abb)) +
+  scale_y_continuous(breaks = seq(0, 23, by = 2), limits = c(0, 23)) +
+  scale_x_continuous(limits = c(0, 3000)) +
+  ylab("Hours of the Day") +
+  xlab("Average Ride Duration (in seconds)") +
+  labs(title = "Cyclistic: Preferred Time of Day",
+       subtitle = "Breakdown of Ride Duration by Hour of the Day",
+       caption = "Data collected by Motivate International Inc.",
+       color = "Member Type",
+       size = "Count")
+```
+
+###### Missing Values
+
+```{r CII - Missing Value Calculations, warning=FALSE}
+paste(125/6230310*100,'%',sep = '')
+```
+
+With this plot, we can extract plenty of clear observations. Before elaborating, it is essential to mention that due to the scale being used in the plot, most of the anomaly rides are not represented. However, these rides only account for 0.002% of rides (125 rides in count). Following the first plot, red represents annual members and blue represents casual riders. First, throughout all months of the year, and all times, we can see casual riders travel longer and in larger counts than most groups of annual members. Additionally, The data shows annual members consistently travel for no more than approximately 1000 seconds (which is roughly 10-15 minutes) -- during just about every hour of the day and every month. Beyond that, the most popular times to travel are between 10 AM and 6 PM during each month. The longest average ride duration trips are covered from 10 AM-2 PM and 7 PM (+-1hr). With honorable mention, although these rides aren't in droves, we can see a larger number of casual riders take trips between midnight and 5 AM and there is a uniquely lengthy amount of time covered during the twilight hours from both member groups. I guess the activities of the night breed the confidence of triathletes! Lastly, ridership, in general, takes a massive hit between November and March, particularly in the casual rider group. However, I wouldn't be severely concerned considering the inclement weather the city must endure during that time of the year.
+
+###### Marketing Notes:
+
+Since some of the casual riders seem to be seasonal, a season pass could be created. Maybe a promotion targeted towards users who ride through the winter months.
+
+##### Cinder-Riders
+
+Noticing the anomaly of the twilight hours, I had to see what useful observations could be extracted from the data. So, I sought to find differentiating qualities between the rider types.
+
+###### Code Modification and Calculation
+
+```{r}
+rides_annual_member_0_to_4 <- time_cyc_df %>%
+  filter(hour >= 0 & hour <= 4, member_type == "Annual")
+
+rs_am_0t4 <- rides_annual_member_0_to_4 %>%
+  summarize(
+    count = sum(count),
+    mean_duration = mean(avg_ride_duration),
+    max_duration = max(avg_ride_duration),
+    min_duration = min(avg_ride_duration),
+    mode_duration = as.numeric(names(table(avg_ride_duration))[which.max(table(avg_ride_duration))])
+  )
+
+print(rs_am_0t4)
+View(rs_am_0t4)
+
+count_an_0to4 <- sum(rides_annual_member_0_to_4$count)
+
+print(count_an_0to4)
+```
+
+Now that we've quantified the behavior of annual members during the twilight hours, let's see how they stack up against each other. 
+
+Same process:
+
+```{r}
+rides_casual_member_0_to_4 <- time_cyc_df %>%
+  filter(hour >= 0 & hour <= 4, member_type == "Casual")
+
+rs_cm_0t4 <- rides_casual_member_0_to_4 %>%
+  summarize(
+    count = sum(count),
+    mean_duration = mean(avg_ride_duration),
+    max_duration = max(avg_ride_duration),
+    min_duration = min(avg_ride_duration),
+    mode_duration = as.numeric(names(table(avg_ride_duration))[which.max(table(avg_ride_duration))])
+  )
+
+print(rs_cm_0t4)
+View(rs_cm_0t4)
+
+count_ca_0to4 <- sum(rides_casual_member_0_to_4$count)
+
+print(count_ca_0to4)
+```
+
+Wow! Alright, the data shows us that casual riders are the royalty of the twilight hours not only in ride duration but in ride count!
+
+###  Day of Week
+##### Which day of the week experiences the greatest influx of bike rides?
+
+**Focus:** Discover what day of the week members prefer and if those stats change over the year to help further differentiate the member types.
+
+#### Chart III
+
+```{r Chart III - Day of Week, warning=FALSE, echo=FALSE}
+ggplot(data = time_cyc_df) +
+  geom_point(mapping = aes(x = avg_ride_duration, y = wday,
+                           color = member_type,
+                           size = count)) +
+  facet_wrap(~ factor(month(`month`), labels = month.abb)) +
+  scale_y_continuous(breaks = 1:7, limits = c(1, 7), 
+                     labels = c("Sun", "Mon", "Tue", "Wed", 
+                                "Thu", "Fri", "Sat")) +
+  scale_x_continuous(limits = c(0, 3000)) +
+  xlab("Average Ride Duration (in seconds)") +
+  ylab("Days of the Week") +
+  labs(title = "Cyclistic: Preferred Day of Week",
+       subtitle = "Breakdown of Ride Duration by Day of the Week",
+       caption = "Data collected by Motivate International Inc.",
+       color = "Member Type",
+       size = "Count")
+```
+
+###### Missing Values
+
+Due to the scale being used in the plot, most of the anomaly rides are not represented. 
+
+```{r CIII - Missing Value Calculations, warning=FALSE}
+paste(125/6230310*100,'%',sep = '')
+```
+
+In creating this graph, 125 rows were removed. However, these rides only account for 0.002% of rides. This visualization best represents the patterns of both member types during the week. 
+
+Across the board, and during any time of the week, annual members do not typically take long rides. Annual members typically outnumber casual riders, but through their performance, casual riders outnumber annual members in trips past 1000 seconds or more. With that said, this is primarily true from April to October, for the casual rider population experiences fluctuation during the colder months. Besides its consistency, there is nothing particularly remarkable about weekday performance-- the longest trips are made during weekends. However, Tuesdays and Wednesdays do appear to be the least active days, in general, whether it be due to ride count or distance traveled. Considering weekdays are workdays, trips during the week tend to be shorter than trips made during the weekend. Lastly, the months with the least amount of rides (fall and winter months), are the months in which annual members travel the longest distances.
+
+###### Marketing Notes:
+
+Since some of the casual riders seem to be seasonal, a season pass could be
+created. Or because there is already a consistent amount of annual members who take long-duration trips through the winter, a special winter promotion of some sort could be implemented that would convert casual riders and reward preexisting annual members. 
+
+### Time of Year  
+##### Which months witness the highest volume of rides?
+
+**Focus:** Analyze member behavior in reference to the months of the year to further differentiate the member types.
+
+**DF Mod**
+
+In this dataframe modification, ride counts for each month are organized by member type.
+
+```{r CIV - Time of Year Dataframe Mods and Table, warning=FALSE}
+m_df <- ttrm_cyc_df %>%
+  select(ride_id, rideable_type, start_time, end_time, start_station_name, 
+         end_station_name, member_type) %>%
+  mutate(start_month = month(start_time))
+
+
+m_summary <- m_df %>% 
+  group_by(start_month, member_type) %>% 
+  summarize(rider_count = n())
+
+
+head(arrange(m_summary, -rider_count))
+```
+
+#### Chart IV
+
+```{r Chart IV - Time of Year, warning=FALSE, echo=FALSE}
+ggplot(data = m_df) +
+  geom_bar(mapping = aes(x = start_month, 
+                         color = member_type, fill = member_type)) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +  # Customize x-axis labels
+  xlab("Month") +
+  ylab("Number of Rides") +
+  labs(title = "Cyclistic: Preferred Time of Year",
+       subtitle = "Breakdown of Ride Count by Month",
+       caption = "Data collected by Motivate International Inc.")
+```
+
+This chart is designed to highlight which times of the year are most attractive for Cyclistic users; showcasing the population of each member group and how they fluctuate over the course of a year. Annual members are represented in red and casual riders are in blue. One clear observation is that the most popular month for annual members is April with a count flowing over the figure of 500,000 rides. In the same breath, the most popular month for casual riders is July with a ride count of slightly over 400,000. Additionally, July is the most active month for Cyclistic users in total. Notably, this plot showcases how annual members lead in participation. For example, in contrast, the previously presented plots may have appeared to communicate the opposite message based on the way casual riders typically perform. 
+
+###### Marketing Notes:
+
+Knowing July is the most active month for all users, a special summer promotion could be implemented to boost the number of annual members; Extended trial period: Provide casual users with an extended trial period for the annual membership during the summer. Gamification: create a game that awards casual riders if they ride for a minimum of X days, they get a free Annual membership for July. Creating a promotion for July will create more chances for the member types to engage and potentially initiate conversions through referral/word-of-mouth since this is the month when most users are active.
+
+### Bike Type 
+##### What is the preferred bike type?
+
+**PURPOSE:** Understanding what kinds of bikes each member type prefers will help us further differentiate the rider groups.
+
+**DF Mod**
+
+To perform calculations, I must create a summary for "member_type" related to "rideable_type". Doing this will give us a clear count of what kind of member uses what kind of bike.
+
+```{r CV - Bike Type Dataframe Mod and Tab, warning=FALSE}
+b_summary <- m_df %>% 
+  group_by (member_type, rideable_type) %>% 
+  summarize(count = n())
+
+
+arrange(b_summary, -count)
+head(arrange(b_summary, -count))
+```
+
+##### Calculations
+
+Electric Bike vs. Classic Bike
+
+I'll use these calculations to provide context to the visualization.
+
+###### Annual Member Bike Preference
+```{r CV - AM - Missing Value Calculations, warning=FALSE}
+1875078 - 1870508
+```
+
+Annual Members Prefer Electric Bikes
+
+###### Casual Members' Bike Preference
+```{r  CV - CM - Missing Value Calculations, warning=FALSE}
+1363301 - 938789
+```
+
+Casual Members prefer electric bikes
+
+###### Docked Bike Statistics
+```{r CV - CM - Missing Value Calculations II, warning=FALSE}
+182634
+```
+
+##### Bike Preference Ratio
+
+I seek to establish the correlation between ride count demographics and bike type preferences. There are 2,484,670 casual riders and 3,745,537 annual members. Above are the calculations for each member type describing which bike types are preferred.
+
+##### Casual Rider-to-Bike Ratio
+###### Electric Bike Ratio
+
+1363301/2484670 = u/100
+u = 54.8099
+
+5.5/10 casual riders prefer electric bikes.
+
+###### Classic Bike Ratio
+
+938789/2484670 = x/100
+x = 37.7515
+
+3.8/10 casual riders prefer classic bikes.
+
+###### Docked Bike Ratio
+
+
+182634/2484670 = x/100
+x = 7.3458
+
+.73/10 casual riders prefer classic Bikes
+
+##### Annual Member-to-Bike Ratio
+###### Electric Bike Ratio
+
+1875042/3745586 = x/100
+x = 50.0497
+
+5/10 annual members prefer electric bikes.
+
+###### Annual Member Classic Bike Ratio
+
+1870508/3745586 = q/100
+q = 49.9402
+
+5/10 annual members prefer classic bikes.
+
+#### Chart V
+
+```{r Chart V - Bike Type, warning=FALSE, echo=FALSE}
+ggplot(data = b_summary) +
+  geom_col(mapping = aes(x = "", y = count, fill = count, width = 1, 
+                         color = member_type)) +
+  coord_polar("y", start = 0) +
+  theme_void() +
+  labs(
+    title = "Cyclistic: Preferred Bike Type",
+    subtitle ="Number of Rides Initiated by Each Rider Type Per Bike Type",
+    caption = "Data collected by Motivate International Inc.",
+    color = "Member Type"
+  ) +
+  scale_fill_continuous(name = "Count") +
+  facet_wrap(~ str_replace_all(rideable_type, "_", " ") %>% str_to_title())
+```
+
+Since we know that annual members technically outnumber casual riders, it is no question, *who uses each bike type more*. However, we can still quantify the preferences of each member type. The chart above illustrates what kind of bikes each rider type prefers. Annual members are represented by portions outlined in red and casual riders are outlined in blue. With a slim (0.24%) difference of 4,570 rides (concerning the overall figure ), Annual members prefer electric bikes. On the other hand, casual riders prefer electric bikes by a difference of 424,512. After calculating the ratio of member type to bike type, I discovered that a little more than half of each population prefers electric bikes. The casual rider population prefers electric bikes more at 5.4/10 members. The Annual member population uses electric bikes at a rate of 5/10 members. For classic bikes, numbers are 4.9/10 for annual members and 3.8/10 for casual riders. Through this observation, we can safely conclude that there is an evident distinction between member types and bike preferences. Where casual riders' opinions are stronger toward electric bikes, annual members are more neutral toward what kind of bikes they use. Moreover, it is worth mentioning that casual riders are the only member type that prefers the "Docked Bike" at .73/10 members.
+
+###### Marketing Notes:
+
+Noting that a small number of casual riders prefer classic bikes, providing a free trial with marketing that emphasizes fitness and health can be done to boost preference levels toward classic bikes and annual membership numbers. Or, give special promotions to members who use electric bikes.
+
+## Conclusion
+
+There were many observations, but annual members and casual riders differ in a multitude of ways:
+
+* The data shows that casual riders take longer trips than Annual Members and through the course of the year, annual and casual riders have differentiating behavior.
+
+* Where annual members do not have strong opinions toward what kinds of bikes they use, casual riders conclusively have a strong opinion toward electric bikes.
+
+* Annual members have established a secondary hub further south and casual riders have moved further north. Additionally, we noticed annual members are located closer to Universities, Hospitals, and Businesses where casual riders are located closer to landmarks and tourist attractions.
+
+When it comes to marketing, with the analysis performed, there are tons of actionable steps that can be taken to create the desired outcome. However, considering data-driven insights, these marketing options exhibit the lowest amount of risk. 
+
+* You can market toward users that take the longest rides. For example, How about 35% off annual membership for casual riders who participate in trips with the longest ride duration?
+
+* Noting that a small number of casual riders prefer classic bikes, providing a free trial with marketing that emphasizes fitness and health can boost preference levels toward classic bikes and annual membership numbers in tandem. Or, give special promotions to members who use electric bikes.
+
+* Noting that populations of Annual Members are highest near financial districts, schools, and medical facilities, marketing should be done within the vicinity of these areas where there are high concentrations of casual riders. In beneficial consequence, since there is a new hub of casual riders in Evanston, as of this year, these members would be the perfect individuals to market to and convert into annual members.
+
+* With honorable mention, we can market to the Cinder-Riders, I mean, they’re a special breed!
